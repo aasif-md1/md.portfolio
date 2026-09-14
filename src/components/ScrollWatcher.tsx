@@ -36,32 +36,42 @@ export default function ScrollWatcher() {
     ]
 
     const onScroll = () => {
-      if (!scrollEl) return
-      const el = scrollEl as HTMLElement
-      const progress = el.scrollTop / (el.scrollHeight - el.clientHeight)
+      let progress = 0
+      if (scrollEl) {
+        const el = scrollEl as HTMLElement
+        const total = el.scrollHeight - el.clientHeight
+        progress = total > 0 ? el.scrollTop / total : 0
+      } else if (typeof window !== 'undefined') {
+        const total = document.documentElement.scrollHeight - window.innerHeight
+        progress = total > 0 ? window.scrollY / total : 0
+      }
 
       panels.forEach(({ id, start, end }) => {
-        const panel = document.getElementById(id)
+        const panel = document.getElementById(id) || document.getElementById(id.toLowerCase())
         if (!panel) return
 
         const inRange = progress >= start && progress < end
         const mid = (start + end) / 2
         const dist = Math.abs(progress - mid) / ((end - start) / 2)
         const opacity = Math.max(0, 1 - dist * 1.4)
+        // 2.5: blur(6px) -> blur(0) and translateY(16px) -> translateY(0)
+        const blurAmount = inRange ? (1 - Math.min(1, opacity)) * 6 : 6
+        const translateY = inRange ? (1 - Math.min(1, opacity)) * 16 : 16
 
         panel.style.opacity = String(inRange ? opacity : 0)
         panel.style.pointerEvents = inRange && opacity > 0.3 ? 'auto' : 'none'
-        panel.style.transform = panel.style.transform.includes('translate(-50%, -50%)')
-          ? `translate(-50%, calc(-50% + ${inRange ? 0 : 20}px))`
-          : `translateY(calc(-50% + ${inRange ? 0 : 20}px))`
-        panel.style.transition = 'opacity 0.6s ease, transform 0.6s ease'
+        panel.style.filter = `blur(${blurAmount.toFixed(1)}px)`
+        panel.style.transform = `translateY(${translateY.toFixed(1)}px)`
+        panel.style.transition = 'opacity 0.6s ease, transform 0.6s ease, filter 0.6s ease'
       })
     }
 
     tryFind()
+    window.addEventListener('scroll', onScroll, { passive: true })
 
     return () => {
       if (scrollEl) scrollEl.removeEventListener('scroll', onScroll)
+      window.removeEventListener('scroll', onScroll)
     }
   }, [])
 

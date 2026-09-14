@@ -2,17 +2,24 @@ import { useEffect, useRef } from 'react'
 import { useThree, useFrame } from '@react-three/fiber'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
+import { useReducedMotion } from '../hooks/useReducedMotion'
 
 gsap.registerPlugin(ScrollTrigger)
 
 export default function CameraRig() {
   const { camera } = useThree()
   const camProxy = useRef({ x: 0, y: 1, z: 6, lookX: 0, lookY: 0, lookZ: 0 })
+  const reducedMotion = useReducedMotion()
 
   useEffect(() => {
-    // Initial hero framing: zoomed in, laptop fills 50-60% of screen
+    // Initial hero framing
     camera.position.set(0, 1, 6)
     camera.lookAt(0, 0, 0)
+
+    if (reducedMotion) {
+      camProxy.current = { x: 0, y: 1.5, z: 5, lookX: 0, lookY: 0, lookZ: 0 }
+      return
+    }
 
     const tl = gsap.timeline({
       scrollTrigger: {

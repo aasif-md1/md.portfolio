@@ -1,24 +1,37 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { Canvas } from '@react-three/fiber'
-import Scene from './components/Scene'
+import Scene, { type GyroStatus } from './components/Scene'
 import UIOverlay from './components/UIOverlay'
 import Nav from './components/Nav'
 import Preloader from './components/Preloader'
+import CanvasLoader from './components/CanvasLoader'
+import ScrollProgressRail from './components/ScrollProgressRail'
+import { initLenis, destroyLenis, scrollToTop, setLenisActMode } from './utils/lenis'
+import { useDeviceTier } from './hooks/useDeviceTier'
+import { useReducedMotion } from './hooks/useReducedMotion'
 
 export default function App() {
   const [act, setAct] = useState<1 | 2>(1)
   const [isWarping, setIsWarping] = useState(false)
   const [, setLoaded] = useState(false)
+  const [gyroStatus, setGyroStatus] = useState<GyroStatus>('idle')
+  const { isMobile, dpr, shadows, shadowMapSize } = useDeviceTier()
+  const reducedMotion = useReducedMotion()
   // warpPhase drives the renaud-style wireframe transition in Scene
   // 'idle' | 'wireframe' | 'zoomout' | 'zoomin'
   const [warpPhase, setWarpPhase] = useState<'idle' | 'wireframe' | 'zoomout' | 'zoomin'>('idle')
 
-  // Guarantee initial load/reload starts strictly at top: 0
+  // Initialize Lenis smooth scroll and guarantee initial load starts strictly at top: 0
   useEffect(() => {
     if ('scrollRestoration' in history) {
       history.scrollRestoration = 'manual'
     }
-    window.scrollTo({ top: 0, left: 0, behavior: 'instant' })
+    initLenis()
+    scrollToTop(true)
+
+    return () => {
+      destroyLenis()
+    }
   }, [])
 
   // Keep root HTML and body background color strictly synchronized with active act
@@ -26,11 +39,25 @@ export default function App() {
     const bg = act === 1 ? '#eef2f6' : '#08080c'
     document.documentElement.style.backgroundColor = bg
     document.body.style.backgroundColor = bg
+    setLenisActMode(act)
   }, [act])
 
   const toggleAct = (targetAct?: 1 | 2) => {
     const nextAct = targetAct !== undefined ? targetAct : (act === 1 ? 2 : 1)
     if (nextAct === act) return
+
+    // If reduced motion is preferred, use gentle crossfade without 3D warp fly-through
+    if (reducedMotion) {
+      setIsWarping(true)
+      setTimeout(() => {
+        setAct(nextAct)
+        scrollToTop(true)
+        setTimeout(() => {
+          setIsWarping(false)
+        }, 250)
+      }, 250)
+      return
+    }
 
     // Phase 1: go wireframe (0 → 600ms)
     setIsWarping(true)
@@ -44,7 +71,7 @@ export default function App() {
     // Phase 3: switch act + start zoom in (1100ms → 1700ms)
     setTimeout(() => {
       setAct(nextAct)
-      window.scrollTo({ top: 0, behavior: 'instant' })
+      scrollToTop(true)
       setWarpPhase('zoomin')
     }, 1100)
 
@@ -60,16 +87,11 @@ export default function App() {
       {/* Authentic Initial Preloader Screen */}
       <Preloader onLoaded={() => setLoaded(true)} />
 
-      {/* Warp Transition Overlay — only flashes black at the exact act-switch moment */}
+      {/* Warp Transition Overlay — crossfades for reduced motion, flashes black during act switches */}
       <div 
-        className="fixed inset-0 z-50 bg-black pointer-events-none"
+        className="fixed inset-0 z-50 bg-black pointer-events-none transition-opacity duration-300"
         style={{
-          opacity:
-            warpPhase === 'wireframe' ? 0       // transparent — show 3D wireframe
-          : warpPhase === 'zoomout'  ? 0       // transparent — show zoom-out
-          : warpPhase === 'zoomin'   ? 0       // transparent — show zoom-in of new act
-          : 0,                                  // idle — transparent
-          transition: warpPhase === 'zoomin' ? 'opacity 0.4s ease-out' : 'none',
+          opacity: reducedMotion ? (isWarping ? 1 : 0) : 0,
         }}
       />
 
@@ -79,11 +101,11 @@ export default function App() {
       {/* Fixed Fullscreen 3D Canvas Background */}
       <div className={`fixed inset-0 w-screen h-screen z-0 ${act === 2 ? 'pointer-events-auto' : 'pointer-events-none'}`}>
         <Canvas
-          shadows
+          shadows={shadows}
           eventSource={typeof document !== 'undefined' ? (document.getElementById('root') || undefined) : undefined}
           camera={{ position: [0, 2.4, 7], fov: 46 }}
-          dpr={Math.min(window.devicePixelRatio, 2)}
-          gl={{ antialias: true, alpha: false, powerPreference: 'high-performance' }}
+          dpr={dpr}
+          gl={{ antialias: !isMobile, alpha: false, powerPreference: 'high-performance' }}
           className="w-full h-full"
         >
           {/* Background & Fog: pure black during wireframe/zoomout so skeleton lines pop */}
@@ -98,12 +120,12 @@ export default function App() {
               <fog attach="fog" args={['#eef2f6', 16, 80]} />
               <ambientLight intensity={0.3} color="#ffffff" />
               <directionalLight 
-                castShadow
+                castShadow={shadows}
                 position={[15, 20, 10]} 
                 intensity={2.5} 
                 color="#ffffff" 
-                shadow-mapSize-width={2048}
-                shadow-mapSize-height={2048}
+                shadow-mapSize-width={shadowMapSize}
+                shadow-mapSize-height={shadowMapSize}
                 shadow-camera-left={-30}
                 shadow-camera-right={30}
                 shadow-camera-top={30}
@@ -127,7 +149,14 @@ export default function App() {
             </>
           )}
           
-          <Scene act={act} isWarping={isWarping} warpPhase={warpPhase} />
+          <Suspense fallback={<CanvasLoader />}>
+            <Scene 
+              act={act} 
+              isWarping={isWarping} 
+              warpPhase={warpPhase} 
+              onGyroStatusChange={setGyroStatus}
+            />
+          </Suspense>
         </Canvas>
       </div>
 
@@ -139,8 +168,15 @@ export default function App() {
           pointerEvents: isWarping ? 'none' : 'auto',
         }}
       >
-        <UIOverlay act={act} onContinue={() => toggleAct(2)} onSwitchAct={toggleAct} />
+        <UIOverlay 
+          act={act} 
+          gyroStatus={gyroStatus}
+          onContinue={() => toggleAct(2)} 
+          onSwitchAct={toggleAct} 
+        />
       </div>
+      {/* Scroll Progress Rail indicator for Act 1 and Act 2 */}
+      <ScrollProgressRail act={act} />
     </div>
   )
 }

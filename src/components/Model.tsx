@@ -1,10 +1,12 @@
 import * as THREE from 'three'
-import { useRef, useEffect } from 'react'
+import { useRef, useEffect, Suspense } from 'react'
 import { useGLTF, Html } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import type { GLTF } from 'three-stdlib'
+import CanvasLoader from './CanvasLoader'
+import { useReducedMotion } from '../hooks/useReducedMotion'
 
 gsap.registerPlugin(ScrollTrigger)
 
@@ -13,14 +15,20 @@ type GLTFResult = GLTF & {
   materials: { PaletteMaterial001: THREE.MeshStandardMaterial }
 }
 
-export default function Model(props: any) {
+function InnerModel(props: any) {
   const { nodes, materials } = useGLTF('/models/asus_rog_zephyrus_duo_17-transformed.glb') as unknown as GLTFResult
   const lidRef = useRef<THREE.Group>(null)
   const modelRef = useRef<THREE.Group>(null)
+  const reducedMotion = useReducedMotion()
 
   useEffect(() => {
     if (!lidRef.current) return
     
+    if (reducedMotion) {
+      lidRef.current.rotation.x = 2.967
+      return
+    }
+
     // Use a proxy object for GSAP to properly animate the Euler rotation
     const lidProxy = { x: -Math.PI / 2 } // Start closed
     lidRef.current.rotation.x = lidProxy.x
@@ -125,7 +133,7 @@ export default function Model(props: any) {
             scale={0.05}
           >
             <div className="w-[600px] h-[340px] bg-bg-base text-text-primary flex flex-col justify-center items-center rounded-sm border border-transparent">
-               <h1 className="text-5xl font-heading font-bold text-accent-primary mb-4 tracking-tight">John Doe</h1>
+               <h1 className="text-5xl font-heading font-bold text-accent-primary mb-4 tracking-tight">Md Aasif</h1>
                <p className="text-xl text-text-secondary text-center px-8">Computer Science student<br/>Full-stack + creative dev</p>
             </div>
           </Html>
@@ -134,6 +142,14 @@ export default function Model(props: any) {
         <mesh geometry={nodes.mesh_8.geometry} material={nodes.mesh_8.material} />
       </group>
     </group>
+  )
+}
+
+export default function Model(props: any) {
+  return (
+    <Suspense fallback={<CanvasLoader />}>
+      <InnerModel {...props} />
+    </Suspense>
   )
 }
 

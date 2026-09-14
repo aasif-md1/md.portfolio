@@ -1,4 +1,5 @@
 import { Globe, Shrub } from 'lucide-react'
+import { scrollToTop, scrollToElement } from '../utils/lenis'
 
 interface NavProps {
   act: 1 | 2
@@ -7,10 +8,7 @@ interface NavProps {
 
 export default function Nav({ act, onToggleAct }: NavProps) {
   const scrollTo = (id: string) => {
-    const el = document.getElementById(id)
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth' })
-    }
+    scrollToElement(`#${id}`)
   }
 
   return (
@@ -19,7 +17,7 @@ export default function Nav({ act, onToggleAct }: NavProps) {
       <button 
         onClick={() => {
           if (act !== 1) onToggleAct(1)
-          window.scrollTo({ top: 0, behavior: 'smooth' })
+          scrollToTop(false)
         }}
         className={`font-bold text-lg sm:text-xl md:text-2xl tracking-[0.2em] md:tracking-[0.25em] font-aquire uppercase hover:text-[#c93b2b] transition-colors cursor-pointer shrink-0 ${
           act === 1 ? 'text-[#161216]' : 'text-white'
