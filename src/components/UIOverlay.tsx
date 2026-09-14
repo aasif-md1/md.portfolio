@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, lazy, Suspense } from 'react'
 import {
   GitMerge,
   ArrowRight,
@@ -10,11 +10,12 @@ import {
   X,
 } from 'lucide-react'
 
-import SkillsSection from './SkillsSection'
-import ContactSection from './ContactSection'
+const SkillsSection = lazy(() => import('./SkillsSection'))
+const ContactSection = lazy(() => import('./ContactSection'))
 
 interface UIOverlayProps {
   act: 1 | 2
+  gyroStatus?: 'idle' | 'granted' | 'denied' | 'unsupported'
   onContinue: () => void
   onSwitchAct: (act: 1 | 2) => void
 }
@@ -156,7 +157,7 @@ const PROJECTS_DATA: ProjectItem[] = [
   },
 ]
 
-export default function UIOverlay({ act, onContinue, onSwitchAct }: UIOverlayProps) {
+export default function UIOverlay({ act, gyroStatus, onContinue, onSwitchAct }: UIOverlayProps) {
   // Stacked Folder State (Detail is closed by default as requested!)
   const [activeProjectIndex, setActiveProjectIndex] = useState(0)
   const [isDetailOpen, setIsDetailOpen] = useState(false)
@@ -207,11 +208,20 @@ export default function UIOverlay({ act, onContinue, onSwitchAct }: UIOverlayPro
 
   return (
     <div className="relative z-10 w-full pointer-events-none">
+      {/* Mobile touch-drag fallback hint when gyro is denied or unsupported */}
+      {(gyroStatus === 'denied' || gyroStatus === 'unsupported') && (
+        <div className="fixed bottom-14 left-4 sm:left-8 z-50 pointer-events-none md:hidden">
+          <div className="px-3 py-1 rounded-full bg-black/75 backdrop-blur-md border border-white/20 text-[10px] font-mono text-[#ddd] flex items-center gap-1.5 shadow-lg">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#c93b2b] animate-ping" />
+            <span>Drag to look around</span>
+          </div>
+        </div>
+      )}
       {act === 1 ? (
         /* ========================================================================= */
         /* ============================ ACT 1: SAKURA SHRINE ======================= */
         /* ========================================================================= */
-        <div className="text-[#161216]">
+        <div id="scroll-container" className="text-[#161216]">
           {/* Hero Viewport */}
           <section className="h-screen flex flex-col justify-between p-5 sm:p-8 md:p-14 pt-20 sm:pt-24 md:pt-28 select-none relative">
             <div className="max-w-xl pointer-events-none pt-2">
@@ -272,14 +282,17 @@ export default function UIOverlay({ act, onContinue, onSwitchAct }: UIOverlayPro
             </div>
           </section>
 
+          {/* Scroll-length spacer: generous 550vh runway provides slow, unhurried cinematic walking speed */}
+          <div className="h-[550vh] w-full pointer-events-none" aria-hidden="true" />
+
           {/* Act 1 Scroll Travel & Clean Click to Continue Prompt */}
           <section className="h-screen flex flex-col items-center justify-center select-none pointer-events-none w-full overflow-hidden">
             <button
               onClick={onContinue}
-              className="pointer-events-auto group cursor-pointer text-center w-full h-[65vh] md:h-[75vh] flex flex-col items-center justify-center transition-transform duration-200 hover:scale-[1.02] will-change-transform px-4"
+              className="pointer-events-auto cursor-pointer text-center w-full h-[65vh] md:h-[75vh] flex flex-col items-center justify-center transition-transform duration-200 hover:scale-[1.02] will-change-transform px-4"
             >
               <h2
-                className="pointer-events-none whitespace-nowrap text-3xl sm:text-5xl md:text-7xl lg:text-8xl xl:text-9xl font-bold font-movement uppercase tracking-wider transition-colors duration-200 text-transparent group-hover:text-[#161216] group-hover:[-webkit-text-fill-color:#161216] group-hover:[-webkit-text-stroke-color:#161216]"
+                className="pointer-events-auto whitespace-nowrap text-3xl sm:text-5xl md:text-7xl lg:text-8xl xl:text-9xl font-bold font-movement uppercase tracking-wider transition-colors duration-200 text-transparent hover:text-[#161216] hover:[-webkit-text-fill-color:#161216] hover:[-webkit-text-stroke-color:#161216]"
                 style={{ WebkitTextStroke: '2px #161216' }}
               >
                 Click to continue
@@ -770,10 +783,28 @@ export default function UIOverlay({ act, onContinue, onSwitchAct }: UIOverlayPro
           </section>
 
           {/* ── SECTION 2: SKILLS ── */}
-          <SkillsSection />
+          <Suspense fallback={
+            <div className="min-h-[400px] flex items-center justify-center font-mono text-xs text-white/40">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-[#c93b2b] animate-ping" />
+                <span>Loading Skills Spectrum...</span>
+              </div>
+            </div>
+          }>
+            <SkillsSection />
+          </Suspense>
 
           {/* ── SECTION 3: CONTACT ── */}
-          <ContactSection onSwitchAct={onSwitchAct} />
+          <Suspense fallback={
+            <div className="min-h-[300px] flex items-center justify-center font-mono text-xs text-white/40">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-[#c93b2b] animate-ping" />
+                <span>Loading Terminal...</span>
+              </div>
+            </div>
+          }>
+            <ContactSection onSwitchAct={onSwitchAct} />
+          </Suspense>
         </div>
       )}
     </div>

@@ -5,6 +5,10 @@ import * as THREE from 'three'
 import ToriiGate from './ToriiGate'
 import LowPolyTree from './LowPolyTree'
 import Ground from './Ground'
+import FootstepDust, { type FootstepDustHandle } from './FootstepDust'
+
+import { scrollToTop } from '../utils/lenis'
+import { useReducedMotion } from '../hooks/useReducedMotion'
 
 function seededRand(seed: number) {
   const x = Math.sin(seed + 1) * 10000
@@ -14,22 +18,32 @@ function seededRand(seed: number) {
 const GATE_COUNT = 24
 const SPACING    = 7.5
 
+export type GyroStatus = 'idle' | 'granted' | 'denied' | 'unsupported'
+
 interface SceneProps {
   act: 1 | 2
   isWarping: boolean
   warpPhase?: 'idle' | 'wireframe' | 'zoomout' | 'zoomin'
+  onGyroStatusChange?: (status: GyroStatus) => void
 }
 
-export default function Scene({ act, isWarping, warpPhase = 'idle' }: SceneProps) {
+export default function Scene({ act, isWarping, warpPhase = 'idle', onGyroStatusChange }: SceneProps) {
   const groupRef    = useRef<THREE.Group>(null)
   const heroTextRef = useRef<THREE.Group>(null)
   const saturnRef   = useRef<THREE.Group>(null)
   const starsRef    = useRef<THREE.Points>(null)
+  const dustRef     = useRef<FootstepDustHandle>(null)
   const { camera, scene } = useThree()
+  const reducedMotion = useReducedMotion()
 
-  // Scroll tracking
-  const scrollTarget  = useRef(0)
-  const currentScroll = useRef(0)
+  // Scroll tracking & walking velocity
+  const scrollTarget    = useRef(0)
+  const currentScroll   = useRef(0)
+  const prevScrollVal   = useRef(0)
+  const scrollVelocity  = useRef(0)
+  const lastBobVal      = useRef(0)
+  const wasBobRising    = useRef(false)
+  const stepCount       = useRef(0)
 
   // ── Precision Planet Hover & 3D Movement State ────────────────────────────
   const mouseNDC        = useRef({ x: 0, y: 0 })
@@ -38,18 +52,23 @@ export default function Scene({ act, isWarping, warpPhase = 'idle' }: SceneProps
   const angularVelocity = useRef({ x: 0, y: 0 })
   const cumulativeRot   = useRef({ x: 0, y: 0 })
 
-  // ── Stabilized Mobile Gyroscope State (BGMI Precision) ────────────────────
+  // ── Stabilized Mobile Gyroscope & Touch-Drag Fallback State ────────────────
   const gyroTarget      = useRef({ x: 0, y: 0 })
   const gyroSmoothed    = useRef({ x: 0, y: 0 })
   const baseOrientation = useRef<{ gamma: number; beta: number } | null>(null)
   const calibCount      = useRef(0)
   const calibSum        = useRef({ gamma: 0, beta: 0 })
+  const gyroActive      = useRef(false)
+  const touchDrag       = useRef({ x: 0, y: 0 })
+  const lastTouchPos    = useRef({ x: 0, y: 0 })
 
   useEffect(() => {
+    const isTouchDevice = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0)
+
     const handleScroll = () => {
       const totalScroll = document.documentElement.scrollHeight - window.innerHeight
-      if (totalScroll > 0)
-        scrollTarget.current = Math.min(Math.max(window.scrollY / totalScroll, 0), 1)
+      if (totalScroll <= 0) return
+      scrollTarget.current = THREE.MathUtils.clamp(window.scrollY / totalScroll, 0, 1)
     }
 
     const handleMouseMove = (e: MouseEvent) => {
@@ -67,10 +86,36 @@ export default function Scene({ act, isWarping, warpPhase = 'idle' }: SceneProps
       mouseDelta.current.dy = dy
     }
 
+    // Touch-drag fallback for mobile devices when gyro is denied or unsupported
+    const handleTouchStart = (e: TouchEvent) => {
+      if (e.touches.length > 0) {
+        lastTouchPos.current.x = e.touches[0].clientX
+        lastTouchPos.current.y = e.touches[0].clientY
+      }
+    }
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (e.touches.length > 0) {
+        const dx = (e.touches[0].clientX - lastTouchPos.current.x) / window.innerWidth
+        const dy = (e.touches[0].clientY - lastTouchPos.current.y) / window.innerHeight
+        lastTouchPos.current.x = e.touches[0].clientX
+        lastTouchPos.current.y = e.touches[0].clientY
+
+        // Incrementally drag view smoothly
+        touchDrag.current.x = THREE.MathUtils.clamp(touchDrag.current.x + dx * 2.0, -1, 1)
+        touchDrag.current.y = THREE.MathUtils.clamp(touchDrag.current.y - dy * 2.0, -1, 1)
+      }
+    }
+
     // ── Mobile Gyroscope / DeviceOrientation Tilt Support (BGMI Physics) ──
     const handleDeviceOrientation = (e: DeviceOrientationEvent) => {
       if (e.gamma === null || e.beta === null) return
       
+      if (!gyroActive.current) {
+        gyroActive.current = true
+        onGyroStatusChange?.('granted')
+      }
+
       // Auto-calibrate average baseline over first 6 samples for rock-solid stability
       if (calibCount.current < 6) {
         calibSum.current.gamma += e.gamma
@@ -112,16 +157,38 @@ export default function Scene({ act, isWarping, warpPhase = 'idle' }: SceneProps
           (window as any).DeviceOrientationEvent.requestPermission()
             .then((res: string) => {
               if (res === 'granted') {
+                gyroActive.current = true
+                onGyroStatusChange?.('granted')
                 window.addEventListener('deviceorientation', handleDeviceOrientation, { passive: true })
+              } else {
+                gyroActive.current = false
+                onGyroStatusChange?.('denied')
               }
             })
-            .catch(() => {})
+            .catch(() => {
+              gyroActive.current = false
+              onGyroStatusChange?.('denied')
+            })
         }
         window.addEventListener('touchstart', askGyroPermission, { once: true })
         window.addEventListener('click', askGyroPermission, { once: true })
       } else {
         window.addEventListener('deviceorientation', handleDeviceOrientation, { passive: true })
+        if (isTouchDevice) {
+          setTimeout(() => {
+            if (!gyroActive.current) {
+              onGyroStatusChange?.('unsupported')
+            }
+          }, 1500)
+        }
       }
+    } else if (isTouchDevice) {
+      onGyroStatusChange?.('unsupported')
+    }
+
+    if (isTouchDevice) {
+      window.addEventListener('touchstart', handleTouchStart, { passive: true })
+      window.addEventListener('touchmove', handleTouchMove, { passive: true })
     }
 
     window.addEventListener('scroll', handleScroll, { passive: true })
@@ -132,8 +199,12 @@ export default function Scene({ act, isWarping, warpPhase = 'idle' }: SceneProps
       window.removeEventListener('scroll', handleScroll)
       window.removeEventListener('mousemove', handleMouseMove)
       window.removeEventListener('deviceorientation', handleDeviceOrientation)
+      if (isTouchDevice) {
+        window.removeEventListener('touchstart', handleTouchStart)
+        window.removeEventListener('touchmove', handleTouchMove)
+      }
     }
-  }, [])
+  }, [onGyroStatusChange])
 
   // Trees for Act 1
   const elements = useMemo(() =>
@@ -196,14 +267,24 @@ export default function Scene({ act, isWarping, warpPhase = 'idle' }: SceneProps
       hasReachedEnd.current = false
       scrollTarget.current = 0
       currentScroll.current = 0
-      window.scrollTo({ top: 0, left: 0, behavior: 'instant' })
+      prevScrollVal.current = 0
+      scrollVelocity.current = 0
+      lastBobVal.current = 0
+      wasBobRising.current = false
+      stepCount.current = 0
+      scrollToTop(true)
 
-      // Reset all Torii gates to their original starting positions
+      // Reset all Torii gates to their original starting positions & transforms
       if (groupRef.current) {
         groupRef.current.position.z = 0
         const children = groupRef.current.children
         for (let i = 0; i < children.length; i++) {
           children[i].position.z = -i * SPACING
+          const torii = children[i].children[1] as THREE.Group | undefined
+          if (torii) {
+            torii.scale.set(1, 1, 1)
+            torii.rotation.set(0, 0, 0)
+          }
         }
       }
     }
@@ -250,35 +331,55 @@ export default function Scene({ act, isWarping, warpPhase = 'idle' }: SceneProps
 
   // ── Main Render Loop ───────────────────────────────────────────────────────
   useFrame((state, delta) => {
-    currentScroll.current = THREE.MathUtils.damp(currentScroll.current, scrollTarget.current, 4.5, delta)
-    if (currentScroll.current > 0.98) hasReachedEnd.current = true
+    if (act === 1) {
+      // Damped target progression with a strict maximum speed cap (buttery smooth like konstantinfo.com)
+      const damped = THREE.MathUtils.damp(currentScroll.current, scrollTarget.current, 0.8, delta)
+      // Asymmetric walk speed: scroll down is slow & cinematic, scroll up is faster for quick return
+      const stepDiff = damped - currentScroll.current
+      const maxWalkSpeed = stepDiff < 0 ? 0.30 : 0.17
+      const maxStep = maxWalkSpeed * delta
+      currentScroll.current += THREE.MathUtils.clamp(stepDiff, -maxStep, maxStep)
+    } else {
+      currentScroll.current = THREE.MathUtils.damp(currentScroll.current, scrollTarget.current, 3.0, delta)
+    }
+    if (scrollTarget.current > 0.95) hasReachedEnd.current = true
 
     const pCam = camera as THREE.PerspectiveCamera
 
     // ── Warp Phases ──
-    if (warpPhase === 'wireframe') {
-      pCam.position.y = THREE.MathUtils.damp(pCam.position.y, 12,  3.0, delta)
-      pCam.position.z = THREE.MathUtils.damp(pCam.position.z, 22,  3.0, delta)
-      pCam.position.x = THREE.MathUtils.damp(pCam.position.x,  0,  6.0, delta)
-      pCam.lookAt(0, 0, 0)
-      pCam.fov = THREE.MathUtils.damp(pCam.fov, 55, 3.0, delta)
-      pCam.updateProjectionMatrix()
-      return
-    }
-    if (warpPhase === 'zoomout') {
-      pCam.position.y = THREE.MathUtils.damp(pCam.position.y, 35,  5.0, delta)
-      pCam.position.z = THREE.MathUtils.damp(pCam.position.z, 65,  5.0, delta)
-      pCam.lookAt(0, 0, 0)
-      pCam.fov = THREE.MathUtils.damp(pCam.fov, 38, 4.0, delta)
-      pCam.updateProjectionMatrix()
-      return
-    }
-    if (warpPhase === 'zoomin') {
-      pCam.position.y = THREE.MathUtils.damp(pCam.position.y, 2.4, 4.0, delta)
-      pCam.position.z = THREE.MathUtils.damp(pCam.position.z,   7, 4.0, delta)
-      pCam.position.x = THREE.MathUtils.damp(pCam.position.x,   0, 4.0, delta)
-      pCam.fov = THREE.MathUtils.damp(pCam.fov, 46, 4.0, delta)
-      pCam.updateProjectionMatrix()
+    if (reducedMotion) {
+      if (warpPhase !== 'idle') {
+        pCam.position.set(0, 2.4, 7)
+        pCam.lookAt(0, 0, 0)
+        pCam.fov = 46
+        pCam.updateProjectionMatrix()
+        return
+      }
+    } else {
+      if (warpPhase === 'wireframe') {
+        pCam.position.y = THREE.MathUtils.damp(pCam.position.y, 12,  3.0, delta)
+        pCam.position.z = THREE.MathUtils.damp(pCam.position.z, 22,  3.0, delta)
+        pCam.position.x = THREE.MathUtils.damp(pCam.position.x,  0,  6.0, delta)
+        pCam.lookAt(0, 0, 0)
+        pCam.fov = THREE.MathUtils.damp(pCam.fov, 55, 3.0, delta)
+        pCam.updateProjectionMatrix()
+        return
+      }
+      if (warpPhase === 'zoomout') {
+        pCam.position.y = THREE.MathUtils.damp(pCam.position.y, 35,  5.0, delta)
+        pCam.position.z = THREE.MathUtils.damp(pCam.position.z, 65,  5.0, delta)
+        pCam.lookAt(0, 0, 0)
+        pCam.fov = THREE.MathUtils.damp(pCam.fov, 38, 4.0, delta)
+        pCam.updateProjectionMatrix()
+        return
+      }
+      if (warpPhase === 'zoomin') {
+        pCam.position.y = THREE.MathUtils.damp(pCam.position.y, 2.4, 4.0, delta)
+        pCam.position.z = THREE.MathUtils.damp(pCam.position.z,   7, 4.0, delta)
+        pCam.position.x = THREE.MathUtils.damp(pCam.position.x,   0, 4.0, delta)
+        pCam.fov = THREE.MathUtils.damp(pCam.fov, 46, 4.0, delta)
+        pCam.updateProjectionMatrix()
+      }
     }
 
     // Detect touch / mobile device
@@ -288,16 +389,43 @@ export default function Scene({ act, isWarping, warpPhase = 'idle' }: SceneProps
     gyroSmoothed.current.x = THREE.MathUtils.damp(gyroSmoothed.current.x, gyroTarget.current.x, 5.5, delta)
     gyroSmoothed.current.y = THREE.MathUtils.damp(gyroSmoothed.current.y, gyroTarget.current.y, 5.5, delta)
 
-    // On mobile touch devices: parallax is 100% pure gyroscope!
-    // Synthetic tap-mouse coordinates will NEVER corrupt or offset the camera!
-    // When the user brings the phone back to neutral, curMx & curMy return EXACTLY to 0!
-    const curMx = isTouchDevice ? gyroSmoothed.current.x : mouseNDC.current.x
-    const curMy = isTouchDevice ? gyroSmoothed.current.y : mouseNDC.current.y
+    // On mobile touch devices: if gyro is active use gyro, else fallback to touchDrag
+    const effectiveMobileX = gyroActive.current ? gyroSmoothed.current.x : touchDrag.current.x
+    const effectiveMobileY = gyroActive.current ? gyroSmoothed.current.y : touchDrag.current.y
+
+    const curMx = isTouchDevice ? effectiveMobileX : mouseNDC.current.x
+    const curMy = isTouchDevice ? effectiveMobileY : mouseNDC.current.y
+    const parallaxScale = reducedMotion ? 0.2 : 1.0
+
+    // ── Velocity calculation (per-frame rate of change) ──
+    const rawVel = Math.abs(currentScroll.current - prevScrollVal.current) / Math.max(delta, 0.001)
+    prevScrollVal.current = currentScroll.current
+    scrollVelocity.current = THREE.MathUtils.damp(scrollVelocity.current, rawVel, 8.0, delta)
+    const velocityFactor = THREE.MathUtils.clamp(scrollVelocity.current * 3.5, 0, 1)
 
     // ── ACT 1 ──
     if (act === 1) {
       const totalTravel = GATE_COUNT * SPACING * 0.88
       const forwardZ    = currentScroll.current * totalTravel
+
+      // ── 2.1: Footstep Bob Rhythm (Weight & Rhythm) ──
+      const walkCycleSpeed = 3.8
+      const walkCyclePhase = currentScroll.current * totalTravel * walkCycleSpeed
+      const rawStepBob = Math.abs(Math.sin(walkCyclePhase))
+      const stepBobY   = rawStepBob * 0.045 * velocityFactor
+      const stepBobRoll = Math.sin(walkCyclePhase * 0.5) * 0.008 * velocityFactor
+
+      // ── 2.3: Footstep Dust Burst on Bob Peak (Rising -> Falling) ──
+      const isBobRising = rawStepBob > lastBobVal.current
+      if (wasBobRising.current && !isBobRising && lastBobVal.current > 0.8 && velocityFactor > 0.05) {
+        stepCount.current++
+        const footSide = (stepCount.current % 2 === 0 ? 1 : -1) as -1 | 1
+        dustRef.current?.burst(footSide, pCam.position.z)
+      }
+      wasBobRising.current = isBobRising
+      lastBobVal.current = rawStepBob
+
+      // ── 2.2: Per-gate Proximity Choreography & Infinite Wrap ──
       if (groupRef.current) {
         groupRef.current.position.z = forwardZ
         const children = groupRef.current.children
@@ -305,13 +433,40 @@ export default function Scene({ act, isWarping, warpPhase = 'idle' }: SceneProps
           const child = children[i]
           const worldZ = child.position.z + forwardZ
           if (worldZ > 14) child.position.z -= GATE_COUNT * SPACING
+
+          // Proximity reaction within ~6 units
+          const dist = Math.abs(worldZ - pCam.position.z)
+          const proximity = 1 - THREE.MathUtils.clamp(dist / 6.0, 0, 1)
+          const targetScale = 0.96 + proximity * 0.04
+          const targetRotY = (1 - proximity) * (i % 2 === 0 ? 0.025 : -0.025)
+          const targetRotX = (1 - proximity) * 0.02
+
+          // ToriiGate is child index 1
+          const torii = child.children[1] as THREE.Group | undefined
+          if (torii) {
+            torii.scale.x = THREE.MathUtils.damp(torii.scale.x, targetScale, 6.0, delta)
+            torii.scale.y = THREE.MathUtils.damp(torii.scale.y, targetScale, 6.0, delta)
+            torii.scale.z = THREE.MathUtils.damp(torii.scale.z, targetScale, 6.0, delta)
+            torii.rotation.y = THREE.MathUtils.damp(torii.rotation.y, targetRotY, 6.0, delta)
+            torii.rotation.x = THREE.MathUtils.damp(torii.rotation.x, targetRotX, 6.0, delta)
+          }
         }
       }
+
+      // Camera with walking bob & roll layered on
       pCam.position.x = THREE.MathUtils.damp(pCam.position.x, 0,   3.5, delta)
-      pCam.position.y = THREE.MathUtils.damp(pCam.position.y, 2.3, 3.5, delta)
-      pCam.rotation.x = THREE.MathUtils.damp(pCam.rotation.x,  curMy * 0.25, 4.5, delta)
-      pCam.rotation.y = THREE.MathUtils.damp(pCam.rotation.y, -curMx * 0.35, 4.5, delta)
-      pCam.rotation.z = THREE.MathUtils.damp(pCam.rotation.z, -curMx * 0.05, 4.5, delta)
+      pCam.position.y = THREE.MathUtils.damp(pCam.position.y, 2.3 + stepBobY, 6.0, delta)
+      pCam.rotation.x = THREE.MathUtils.damp(pCam.rotation.x,  curMy * 0.25 * parallaxScale, 4.5, delta)
+      pCam.rotation.y = THREE.MathUtils.damp(pCam.rotation.y, -curMx * 0.35 * parallaxScale, 4.5, delta)
+      pCam.rotation.z = THREE.MathUtils.damp(pCam.rotation.z, -curMx * 0.05 * parallaxScale + stepBobRoll, 4.5, delta)
+
+      // ── 2.4: Fog pulse on fast scroll ──
+      if (scene.fog instanceof THREE.Fog) {
+        const targetNear = THREE.MathUtils.lerp(16, 9, velocityFactor)
+        const targetFar  = THREE.MathUtils.lerp(80, 48, velocityFactor)
+        scene.fog.near = THREE.MathUtils.damp(scene.fog.near, targetNear, 4.0, delta)
+        scene.fog.far  = THREE.MathUtils.damp(scene.fog.far, targetFar, 4.0, delta)
+      }
 
       if (heroTextRef.current) {
         heroTextRef.current.position.y = 0.5 + Math.sin(state.clock.elapsedTime * 0.5) * 0.08
@@ -400,7 +555,7 @@ export default function Scene({ act, isWarping, warpPhase = 'idle' }: SceneProps
         saturnRef.current.scale.setScalar(THREE.MathUtils.damp(saturnRef.current.scale.x, targetScale, 3.0, delta))
 
         // Gentle ambient floating — stays stably anchored in view instead of scrolling off-screen
-        const idleFloat = Math.sin(state.clock.elapsedTime * 0.8) * 0.15
+        const idleFloat = Math.sin(state.clock.elapsedTime * (reducedMotion ? 0.3 : 0.8)) * (reducedMotion ? 0.05 : 0.15)
         saturnRef.current.position.y = THREE.MathUtils.damp(
           saturnRef.current.position.y,
           targetYBase + idleFloat,
@@ -409,8 +564,8 @@ export default function Scene({ act, isWarping, warpPhase = 'idle' }: SceneProps
       }
 
       // Camera parallax
-      const targetX = curMx * 0.48
-      const targetY = 1.8 + curMy * 0.48
+      const targetX = curMx * 0.48 * parallaxScale
+      const targetY = 1.8 + curMy * 0.48 * parallaxScale
       pCam.position.x = THREE.MathUtils.damp(pCam.position.x, targetX, 4.5, delta)
       pCam.position.y = THREE.MathUtils.damp(pCam.position.y, targetY, 4.5, delta)
       pCam.lookAt(0, 0, -20)
@@ -430,6 +585,7 @@ export default function Scene({ act, isWarping, warpPhase = 'idle' }: SceneProps
       {act === 1 ? (
         <>
           {/* ================= ACT 1: SHRINE ================= */}
+          <FootstepDust ref={dustRef} />
           <group ref={heroTextRef} position={[0, 0.4, -8]} visible={false}>
             <Text
               position={[0, 0, 0]}
