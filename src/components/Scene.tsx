@@ -144,6 +144,11 @@ export default function Scene({ onGyroStatusChange, isWarping = false, resetKey 
           const offset = getPathOffset(child.position.z)
           child.position.x = offset.x
           child.rotation.y = offset.rotY
+          const torii = child.children[1] as THREE.Group | undefined
+          if (torii) {
+            torii.scale.set(1, 1, 1)
+            torii.rotation.set(0, 0, 0)
+          }
         }
       }
     }
@@ -491,22 +496,6 @@ export default function Scene({ onGyroStatusChange, isWarping = false, resetKey 
           const offset = getPathOffset(child.position.z)
           child.position.x = offset.x
           child.rotation.y = offset.rotY
-        }
-
-        // High-performance proximity reaction: only compute for nearby gates
-        const dist = Math.abs(worldZ - pCam.position.z)
-        if (dist < 8.5) {
-          const proximity = 1 - THREE.MathUtils.clamp(dist / 6.0, 0, 1)
-          const targetScale = 0.96 + proximity * 0.04
-          const targetRotY = (1 - proximity) * (i % 2 === 0 ? 0.025 : -0.025)
-          const targetRotX = (1 - proximity) * 0.02
-
-          const torii = child.children[1] as THREE.Group | undefined
-          if (torii) {
-            torii.scale.set(targetScale, targetScale, targetScale)
-            torii.rotation.y = targetRotY
-            torii.rotation.x = targetRotX
-          }
         }
       }
     }
