@@ -1,47 +1,47 @@
 import { useMemo } from 'react'
 
-interface Environment3DProps {
-  gateCount?: number
-  spacing?: number
-}
-
-export default function Environment3D({ gateCount = 24, spacing = 8 }: Environment3DProps) {
-  // Mountain silhouettes
+export default function Environment3D() {
+  // Mountain silhouettes in distance
   const mountainGeom = useMemo(() => {
     return [
-      { x: -55, y: 22, z: -170, scale: 38 },
-      { x: -22, y: 26, z: -190, scale: 48 },
-      { x: 18, y: 24, z: -180, scale: 42 },
-      { x: 55, y: 20, z: -160, scale: 34 },
+      { x: -55, y: 32, z: -110, scale: 42 },
+      { x: -24, y: 36, z: -125, scale: 50 },
+      { x: 20, y: 34, z: -120, scale: 45 },
+      { x: 55, y: 28, z: -105, scale: 38 },
     ]
   }, [])
-
-  // Stone lanterns placement
-  const lanterns = useMemo(() => {
-    return Array.from({ length: Math.floor(gateCount / 2) }, (_, i) => ({
-      z: -i * spacing * 2 - 4,
-      leftX: -3.3,
-      rightX: 3.3,
-    }))
-  }, [gateCount, spacing])
 
   return (
     <group>
       {/* ================= CELESTIAL GLOWING MOON ================= */}
-      <group position={[0, 18, -145]}>
-        {/* Moon Disc */}
+      <group position={[0, 14, -68]}>
+        {/* Core Moon Sphere */}
         <mesh>
-          <sphereGeometry args={[15, 24, 24]} />
-          <meshBasicMaterial color="#fff4dc" />
+          <sphereGeometry args={[10, 32, 32]} />
+          <meshBasicMaterial color="#fff8e8" fog={false} />
         </mesh>
-        {/* Corona Halo */}
-        <mesh position={[0, 0, -1]}>
-          <planeGeometry args={[48, 48]} />
+        
+        {/* Inner Moon Glow Halo */}
+        <mesh position={[0, 0, -0.4]}>
+          <planeGeometry args={[32, 32]} />
+          <meshBasicMaterial
+            color="#ffeacc"
+            transparent
+            opacity={0.38}
+            depthWrite={false}
+            fog={false}
+          />
+        </mesh>
+
+        {/* Outer Mystical Warm Corona */}
+        <mesh position={[0, 0, -0.8]}>
+          <planeGeometry args={[70, 70]} />
           <meshBasicMaterial
             color="#ff9944"
             transparent
-            opacity={0.12}
+            opacity={0.18}
             depthWrite={false}
+            fog={false}
           />
         </mesh>
       </group>
@@ -52,58 +52,13 @@ export default function Environment3D({ gateCount = 24, spacing = 8 }: Environme
           <mesh key={i} position={[m.x, m.y / 2, m.z]} rotation={[0, Math.PI / 4, 0]}>
             <coneGeometry args={[m.scale, m.y, 4]} />
             <meshStandardMaterial
-              color="#0d1210"
+              color="#0d1420"
               roughness={1.0}
               flatShading
             />
           </mesh>
         ))}
       </group>
-
-      {/* ================= STONE TORO LANTERNS ================= */}
-      {lanterns.map((l, i) => (
-        <group key={i}>
-          {/* Left Lantern */}
-          <group position={[l.leftX, 0, l.z]}>
-            <mesh position={[0, 0.4, 0]}>
-              <cylinderGeometry args={[0.2, 0.28, 0.8, 6]} />
-              <meshStandardMaterial color="#222" roughness={0.9} flatShading />
-            </mesh>
-            <mesh position={[0, 1.0, 0]}>
-              <boxGeometry args={[0.35, 0.4, 0.35]} />
-              <meshStandardMaterial color="#1a1a1a" roughness={0.9} flatShading />
-            </mesh>
-            <mesh position={[0, 1.0, 0]}>
-              <boxGeometry args={[0.22, 0.28, 0.22]} />
-              <meshBasicMaterial color="#ffaa33" />
-            </mesh>
-            <mesh position={[0, 1.35, 0]}>
-              <coneGeometry args={[0.5, 0.3, 4]} />
-              <meshStandardMaterial color="#1f1f1f" roughness={0.9} flatShading />
-            </mesh>
-          </group>
-
-          {/* Right Lantern */}
-          <group position={[l.rightX, 0, l.z]}>
-            <mesh position={[0, 0.4, 0]}>
-              <cylinderGeometry args={[0.2, 0.28, 0.8, 6]} />
-              <meshStandardMaterial color="#222" roughness={0.9} flatShading />
-            </mesh>
-            <mesh position={[0, 1.0, 0]}>
-              <boxGeometry args={[0.35, 0.4, 0.35]} />
-              <meshStandardMaterial color="#1a1a1a" roughness={0.9} flatShading />
-            </mesh>
-            <mesh position={[0, 1.0, 0]}>
-              <boxGeometry args={[0.22, 0.28, 0.22]} />
-              <meshBasicMaterial color="#ffaa33" />
-            </mesh>
-            <mesh position={[0, 1.35, 0]}>
-              <coneGeometry args={[0.5, 0.3, 4]} />
-              <meshStandardMaterial color="#1f1f1f" roughness={0.9} flatShading />
-            </mesh>
-          </group>
-        </group>
-      ))}
     </group>
   )
 }

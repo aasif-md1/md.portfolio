@@ -18,9 +18,9 @@ export function useDeviceTier(): DeviceTier {
 
     return {
       isMobile,
-      dpr: isMobile ? 1 : Math.min(window.devicePixelRatio || 1, 2),
+      dpr: isMobile ? 1 : Math.min(window.devicePixelRatio || 1, 1.25),
       shadows: !isMobile,
-      shadowMapSize: isMobile ? 512 : 2048,
+      shadowMapSize: 1024,
     }
   }
 

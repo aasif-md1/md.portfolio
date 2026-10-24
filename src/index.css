@@ -50,12 +50,13 @@
   }
 
   html {
-    scroll-behavior: smooth;
+    overscroll-behavior: none;
     background: #eef2f6;
     cursor: ns-resize;
   }
 
   body {
+    overscroll-behavior: none;
     font-family: "Space Grotesk", sans-serif;
     color: #161216;
     -webkit-font-smoothing: antialiased;
@@ -199,3 +200,23 @@
   will-change: transform, opacity, filter;
   transform-origin: left center;
 }
+
+@keyframes scanSweep {
+  0% {
+    top: 0%;
+    opacity: 0;
+  }
+  15% {
+    opacity: 0.95;
+  }
+  85% {
+    opacity: 0.95;
+  }
+  100% {
+    top: 100%;
+    opacity: 0;
+  }
+}
+
+
+

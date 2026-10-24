@@ -3,7 +3,7 @@ import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 
 export interface FootstepDustHandle {
-  burst: (foot: -1 | 1, camZ: number) => void
+  burst: (foot: -1 | 1, camZ: number, camX?: number) => void
 }
 
 const MAX_PARTICLES = 48
@@ -59,8 +59,8 @@ export const FootstepDust = forwardRef<FootstepDustHandle, {}>((_, ref) => {
   }, [])
 
   useImperativeHandle(ref, () => ({
-    burst: (foot: -1 | 1, camZ: number) => {
-      const baseX = foot * 0.32
+    burst: (foot: -1 | 1, camZ: number, camX = 0) => {
+      const baseX = camX + foot * 0.32
       const baseY = 0.06
       const baseZ = camZ - 1.2
 

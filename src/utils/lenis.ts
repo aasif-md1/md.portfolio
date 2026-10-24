@@ -6,30 +6,21 @@ gsap.registerPlugin(ScrollTrigger)
 
 let lenisInstance: Lenis | null = null
 let tickerCallback: ((time: number) => void) | null = null
-let currentAct: 1 | 2 = 1
 
 export function initLenis(): Lenis {
   if (typeof window === 'undefined') return {} as Lenis
   if (lenisInstance) return lenisInstance
 
   const lenis = new Lenis({
-    duration: 1.9,
+    duration: 1.2,
     easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
     smoothWheel: true,
-    wheelMultiplier: 0.4,
-    touchMultiplier: 0.6,
+    wheelMultiplier: 0.55,
+    touchMultiplier: 0.85,
     virtualScroll: (data) => {
-      // In Shrine Act (Act 1): asymmetric clamp — scroll down is slow & cinematic, scroll up is faster for quick return
-      if (currentAct === 1) {
-        if (data.deltaY < 0) {
-          // Scrolling UP (backward) — allow faster movement
-          data.deltaY = Math.max(-35, data.deltaY)
-        } else {
-          // Scrolling DOWN (forward) — keep slow, meditative pace
-          data.deltaY = Math.min(20, data.deltaY)
-        }
-        data.deltaX = 0
-      }
+      data.deltaX = 0
+      // Responsive delta governor: caps individual scroll impulses smoothly without choking natural wheel motion
+      data.deltaY = Math.max(-28, Math.min(28, data.deltaY))
       return true
     },
   })
@@ -55,19 +46,6 @@ export function initLenis(): Lenis {
 
 export function getLenis(): Lenis | null {
   return lenisInstance
-}
-
-export function setLenisActMode(act: 1 | 2) {
-  currentAct = act
-  if (lenisInstance) {
-    const mult = act === 1 ? 0.4 : 1.0
-    const dur = act === 1 ? 1.9 : 1.2
-    lenisInstance.options.wheelMultiplier = mult
-    lenisInstance.options.duration = dur
-    if ((lenisInstance as any).virtualScroll?.options) {
-      (lenisInstance as any).virtualScroll.options.wheelMultiplier = mult
-    }
-  }
 }
 
 export function scrollToTop(immediate = true) {
