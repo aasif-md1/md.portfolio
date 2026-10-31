@@ -215,6 +215,11 @@ export default function SpeedWarpTransition({
       if (elapsed < 1.95) {
         animationRef.current = requestAnimationFrame(loop)
       } else {
+        // Guaranteed midpoint trigger safeguard in case of frame drop
+        if (!midpointTriggered.current) {
+          midpointTriggered.current = true
+          if (onMidpointRef.current) onMidpointRef.current()
+        }
         currentPhaseRef.current = 'idle'
         setPhase('idle')
         if (onCompleteRef.current) onCompleteRef.current()
@@ -223,9 +228,27 @@ export default function SpeedWarpTransition({
 
     animationRef.current = requestAnimationFrame(loop)
 
+    // Backup wall-clock timers to guarantee midpoint and completion even if rAF stalls
+    const midSafetyTimer = setTimeout(() => {
+      if (!midpointTriggered.current) {
+        midpointTriggered.current = true
+        currentPhaseRef.current = 'reveal'
+        setPhase('reveal')
+        if (onMidpointRef.current) onMidpointRef.current()
+      }
+    }, 1750)
+
+    const completeSafetyTimer = setTimeout(() => {
+      currentPhaseRef.current = 'idle'
+      setPhase('idle')
+      if (onCompleteRef.current) onCompleteRef.current()
+    }, 2000)
+
     return () => {
       window.removeEventListener('resize', resizeCanvas)
       if (animationRef.current) cancelAnimationFrame(animationRef.current)
+      clearTimeout(midSafetyTimer)
+      clearTimeout(completeSafetyTimer)
     }
   }, [active, destination])
 

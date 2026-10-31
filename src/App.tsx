@@ -11,7 +11,7 @@ import { useDeviceTier } from './hooks/useDeviceTier'
 import SpeedWarpTransition from './components/SpeedWarpTransition'
 
 export default function App() {
-  const [, setLoaded] = useState(false)
+  const [loaded, setLoaded] = useState(false)
   const [gyroStatus, setGyroStatus] = useState<GyroStatus>('idle')
   const [currentView, setCurrentView] = useState<'torii' | 'kage'>('torii')
   const [transitionActive, setTransitionActive] = useState(false)
@@ -36,22 +36,45 @@ export default function App() {
     }
   }, [])
 
-  // Listen for Return to Torii event from the Kage scene footer button
+  // Listen for Return to Torii and Kage Ready events
   useEffect(() => {
     const handleMsg = (e: MessageEvent) => {
       if (e.data?.type === 'RETURN_TO_TORII') {
         handleReturnToTorii()
+      } else if (e.data?.type === 'KAGE_READY') {
+        if (currentView === 'kage' || transitionActive) {
+          kageIframeRef.current?.contentWindow?.postMessage({ type: 'VIEW_ACTIVE' }, '*')
+          kageIframeRef.current?.contentWindow?.postMessage({ type: 'RESET_TOP' }, '*')
+        }
       }
     }
     window.addEventListener('message', handleMsg)
     return () => window.removeEventListener('message', handleMsg)
-  }, [])
+  }, [currentView, transitionActive])
 
   // Transition from Torii Walk to Kage Night Temple Scene
   const handleContinue = () => {
+    if (transitionActive) return
     setTransitionDest('kage')
     setTransitionActive(true)
-    kageIframeRef.current?.contentWindow?.postMessage({ type: 'RESET_TOP' }, '*')
+
+    const sendKagePulse = () => {
+      kageIframeRef.current?.contentWindow?.postMessage({ type: 'VIEW_ACTIVE' }, '*')
+      kageIframeRef.current?.contentWindow?.postMessage({ type: 'RESET_TOP' }, '*')
+    }
+
+    sendKagePulse()
+    const pulseTimer = setInterval(sendKagePulse, 100)
+    setTimeout(() => clearInterval(pulseTimer), 2500)
+
+    // Failsafe timer: guarantees transition never gets stuck on black screen
+    setTimeout(() => {
+      setCurrentView('kage')
+      setTransitionActive(false)
+      document.documentElement.style.backgroundColor = '#05070a'
+      document.body.style.backgroundColor = '#05070a'
+      sendKagePulse()
+    }, 2000)
   }
 
   // Return to Torii Shrine Walk: start from the very beginning at top
@@ -119,6 +142,12 @@ export default function App() {
           className="w-full h-full border-0 block"
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
           loading="eager"
+          onLoad={() => {
+            if (currentView === 'kage' || transitionActive) {
+              kageIframeRef.current?.contentWindow?.postMessage({ type: 'VIEW_ACTIVE' }, '*')
+              kageIframeRef.current?.contentWindow?.postMessage({ type: 'RESET_TOP' }, '*')
+            }
+          }}
         />
       </div>
 
@@ -177,6 +206,7 @@ export default function App() {
           gyroStatus={gyroStatus}
           onContinue={handleContinue}
           isTransitioning={transitionActive}
+          isLoaded={loaded}
         />
 
         {/* Scroll Progress Rail indicator */}

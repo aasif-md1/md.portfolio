@@ -33,6 +33,36 @@
   font-display: swap;
 }
 
+/* Authentic Art Nuvo Outline Typography */
+@font-face {
+  font-family: 'Art Nuvo Outline';
+  src: url('/fonts/Art-Nuvo-Outline.woff2') format('woff2'),
+       url('/fonts/Art-Nuvo-Outline.woff') format('woff'),
+       url('/fonts/Art-Nuvo-Outline.otf') format('opentype'),
+       url('/fonts/Art-Nuvo-Outline.ttf') format('truetype'),
+       url('/fonts/Art-Nuvo.woff2') format('woff2'),
+       url('/fonts/Art-Nuvo.otf') format('opentype'),
+       url('/fonts/Art-Nuvo.ttf') format('truetype'),
+       url('/fonts/ArtNuvoOutline.otf') format('opentype'),
+       url('/fonts/ArtNuvo.otf') format('opentype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Art Nuvo';
+  src: url('/fonts/Art-Nuvo.woff2') format('woff2'),
+       url('/fonts/Art-Nuvo.woff') format('woff'),
+       url('/fonts/Art-Nuvo.otf') format('opentype'),
+       url('/fonts/Art-Nuvo.ttf') format('truetype'),
+       url('/fonts/Art-Nuvo-Outline.otf') format('opentype'),
+       url('/fonts/Art-Nuvo-Outline.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
 @theme {
   --font-sans: "Space Grotesk", -apple-system, sans-serif;
   --font-mono: "JetBrains Mono", monospace;
@@ -40,6 +70,7 @@
   --font-bytesized: "Bytesized", monospace;
   --font-aquire: "Aquire", sans-serif;
   --font-movement: "Movement", sans-serif;
+  --font-artnuvo: "Art Nuvo Outline", "Art Nuvo", sans-serif;
 }
 
 @layer base {
@@ -217,6 +248,93 @@
     opacity: 0;
   }
 }
+
+/* ── Premium PORTFOLIO Typography Hero Section ── */
+.portfolio-hero-letter {
+  font-family: 'Art Nuvo Outline', 'Art Nuvo', sans-serif;
+  color: transparent;
+  -webkit-text-stroke: clamp(1.8px, 0.35vw, 3.2px) #8A0000;
+  text-stroke: clamp(1.8px, 0.35vw, 3.2px) #8A0000;
+  font-size: clamp(4.5rem, 13vw, 11.5rem);
+  line-height: 1;
+  text-align: center;
+  user-select: none;
+  cursor: pointer;
+  pointer-events: auto;
+  transition: color 300ms cubic-bezier(0.25, 1, 0.5, 1), 
+              -webkit-text-stroke-color 300ms ease,
+              text-shadow 300ms ease,
+              filter 300ms ease;
+  will-change: color, transform;
+}
+
+/* Individual letter hover interaction: fill smoothly transitions to #8A0000 */
+.portfolio-hero-letter:hover {
+  color: #8A0000;
+  -webkit-text-stroke-color: #8A0000;
+  text-shadow: 0 0 24px rgba(138, 0, 0, 0.28);
+  filter: drop-shadow(0 2px 12px rgba(138, 0, 0, 0.25));
+}
+
+/* ── Premium PORTFOLIO Vector Typography Hero ── */
+.portfolio-letter-svg {
+  pointer-events: none !important;
+  display: block;
+  overflow: visible;
+}
+
+.portfolio-letter-path {
+  fill: transparent;
+  stroke: #8A0000;
+  stroke-width: 2.8px;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  pointer-events: all !important;
+  cursor: pointer !important;
+  transition: fill 250ms cubic-bezier(0.25, 1, 0.5, 1), 
+              filter 250ms ease,
+              stroke 250ms ease;
+  will-change: fill, filter;
+}
+
+/* Individual letter hover & active touch interaction: strictly triggers ONLY when on the letter */
+.portfolio-letter-path:hover,
+.portfolio-letter-path:active {
+  fill: #8A0000 !important;
+  filter: drop-shadow(0 0 18px rgba(138, 0, 0, 0.55)) !important;
+}
+
+/* ── Click to Continue Milestone Typography ── */
+.continue-hero-btn {
+  cursor: pointer !important;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.continue-hero-title {
+  color: transparent !important;
+  -webkit-text-fill-color: transparent !important;
+  -webkit-text-stroke: 2px #161216;
+  cursor: pointer !important;
+  pointer-events: auto !important;
+  user-select: none;
+  transition: color 250ms ease, -webkit-text-fill-color 250ms ease, transform 200ms ease;
+  will-change: color, transform;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Hover & touch active on continue button or title: fills with #161216 cleanly */
+.continue-hero-btn:hover .continue-hero-title,
+.continue-hero-btn:active .continue-hero-title,
+.continue-hero-title:hover,
+.continue-hero-title:active {
+  color: #161216 !important;
+  -webkit-text-fill-color: #161216 !important;
+  -webkit-text-stroke-color: #161216 !important;
+}
+
 
 
 

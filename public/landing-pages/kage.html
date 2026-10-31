@@ -7,6 +7,27 @@
 <meta name="description" content="Portfolio of Md Aasif — Creative Full-Stack Developer & 3D Engineer crafting real-time web applications, interactive 3D WebGL experiences, and scalable web architectures.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%2305070a'/%3E%3Ccircle cx='16' cy='17' r='8' fill='%23e0231c'/%3E%3Crect x='4' y='8' width='24' height='2.6' fill='%23dfe7e0'/%3E%3Crect x='7' y='13' width='18' height='2' fill='%23dfe7e0'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="secret-pathways-assets/fonts.css">
+<script>
+window.__kagePendingActive = false;
+window.__kageReady = false;
+window.addEventListener('message', function(e) {
+  if (e.data && e.data.type === 'VIEW_ACTIVE') {
+    window.__kagePendingActive = true;
+    if (typeof window.__kageActivate === 'function') {
+      window.__kageActivate();
+    }
+  } else if (e.data && e.data.type === 'VIEW_PAUSED') {
+    window.__kagePendingActive = false;
+    if (typeof window.__kagePause === 'function') {
+      window.__kagePause();
+    }
+  } else if (e.data && e.data.type === 'RESET_TOP') {
+    if (typeof window.resetToTop === 'function') {
+      window.resetToTop();
+    }
+  }
+});
+</script>
 <style>
 /* ============================================================= tokens */
 :root{
@@ -4928,22 +4949,36 @@ window.returnToTorii = function() {
   }
 };
 
+window.resetToTop = resetToTop;
+
 let isViewActive = window.self === window.top;
+
+window.__kageActivate = function() {
+  isViewActive = true;
+  fadeIn = 1;
+  INTRO.t0 = performance.now();
+  resetToTop();
+  if (!running) {
+    running = true;
+    tPrev = performance.now();
+    queue();
+  }
+  const heroLines = document.querySelectorAll('#hero [data-rv], #hero .mask-line');
+  heroLines.forEach((e) => e.classList.add('rv-in'));
+  requestAnimationFrame(resetToTop);
+};
+
+window.__kagePause = function() {
+  isViewActive = false;
+  running = false;
+  resetToTop();
+};
+
 window.addEventListener('message', (e) => {
   if (e.data?.type === 'VIEW_ACTIVE') {
-    isViewActive = true;
-    resetToTop();
-    if (!running) {
-      running = true;
-      tPrev = performance.now();
-      if (!INTRO.t0) INTRO.t0 = performance.now();
-      queue();
-    }
-    requestAnimationFrame(resetToTop);
+    window.__kageActivate();
   } else if (e.data?.type === 'VIEW_PAUSED') {
-    isViewActive = false;
-    running = false;
-    resetToTop();
+    window.__kagePause();
   } else if (e.data?.type === 'RESET_TOP') {
     resetToTop();
   }
@@ -4971,16 +5006,19 @@ function start() {
   }
   if (preEl) preEl.classList.add('done');
 
-  // If inside parent iframe and waiting for active signal, render single pristine frame then sleep
-  if (!isViewActive) {
+  window.__kageReady = true;
+  if (window.parent && window.parent !== window) {
+    window.parent.postMessage({ type: 'KAGE_READY' }, '*');
+  }
+
+  // If active signal was received or if running standalone, wake immediately
+  if (window.__kagePendingActive || isViewActive) {
+    window.__kageActivate();
+  } else {
     applyCamera();
     updateWorld(0.016);
     render();
     running = false;
-  } else {
-    running = true; tPrev = performance.now();
-    INTRO.t0 = shot !== null ? 0 : performance.now();
-    queue();
   }
   window.__kage = window.__secret = { RIG: RIG, WORLD: WORLD, WORD: WORD, CAM: CAM, POST: POST, renderer: renderer, scene: scene, camera: camera, anchors: () => anchors };
 }
