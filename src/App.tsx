@@ -58,23 +58,19 @@ export default function App() {
     setTransitionDest('kage')
     setTransitionActive(true)
 
-    const sendKagePulse = () => {
-      kageIframeRef.current?.contentWindow?.postMessage({ type: 'VIEW_ACTIVE' }, '*')
-      kageIframeRef.current?.contentWindow?.postMessage({ type: 'RESET_TOP' }, '*')
-    }
+    // Notify kage iframe once to warm up 3D renderer and camera
+    kageIframeRef.current?.contentWindow?.postMessage({ type: 'VIEW_ACTIVE' }, '*')
+    kageIframeRef.current?.contentWindow?.postMessage({ type: 'RESET_TOP' }, '*')
 
-    sendKagePulse()
-    const pulseTimer = setInterval(sendKagePulse, 100)
-    setTimeout(() => clearInterval(pulseTimer), 2500)
-
-    // Failsafe timer: guarantees transition never gets stuck on black screen
+    // Failsafe timer: guarantees transition never gets stuck if animation drops frames
     setTimeout(() => {
       setCurrentView('kage')
       setTransitionActive(false)
       document.documentElement.style.backgroundColor = '#05070a'
       document.body.style.backgroundColor = '#05070a'
-      sendKagePulse()
-    }, 2000)
+      kageIframeRef.current?.contentWindow?.postMessage({ type: 'VIEW_ACTIVE' }, '*')
+      kageIframeRef.current?.contentWindow?.postMessage({ type: 'RESET_TOP' }, '*')
+    }, 2200)
   }
 
   // Return to Torii Shrine Walk: start from the very beginning at top

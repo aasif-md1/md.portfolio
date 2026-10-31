@@ -4697,7 +4697,7 @@ function renderCards(rt) {
 }
 
 /* ==================================================== 13 · the machine */
-let running = false, tPrev = 0, clock = 0, fadeIn = 0;
+let running = false, tPrev = 0, clock = 0, fadeIn = 1;
 const INTRO = { t0: 0 };
 
 function resize() {
@@ -4816,7 +4816,7 @@ function frame(now) {
   const raw = (now - tPrev) / 1000 || 0;
   const dt = Math.min(raw, .05);              /* animation never jumps … */
   tPrev = now; clock += dt;
-  fadeIn = INTRO.t0 ? sat((now - INTRO.t0) / 700) : 1;
+  fadeIn = isViewActive ? 1 : (INTRO.t0 ? sat((now - INTRO.t0) / 700) : 1);
 
   if (lenis) {
     lenis.raf(now);
@@ -4829,8 +4829,8 @@ function frame(now) {
   RIG.my = damp(RIG.my, RIG.tmy, 2.6, dt);
   if (INTRO.t0) {
     const el = (now - INTRO.t0) / 1000;
-    RIG.intro = sat(el / 2.4);
-    WORD.reveal = Math.min(1.2, el / 1.5);
+    RIG.intro = Math.max(RIG.intro || 0, sat(el / 2.4));
+    WORD.reveal = Math.max(WORD.reveal || 0, Math.min(1.2, el / 1.5));
   }
 
   applyCamera();
@@ -4954,18 +4954,20 @@ window.resetToTop = resetToTop;
 let isViewActive = window.self === window.top;
 
 window.__kageActivate = function() {
+  if (isViewActive && running) return;
   isViewActive = true;
   fadeIn = 1;
-  INTRO.t0 = performance.now();
+  INTRO.t0 = 0;
+  RIG.intro = 1;
+  WORD.reveal = 1.2;
   resetToTop();
   if (!running) {
     running = true;
     tPrev = performance.now();
     queue();
   }
-  const heroLines = document.querySelectorAll('#hero [data-rv], #hero .mask-line');
+  const heroLines = document.querySelectorAll('#hero [data-rv], #hero .mask-line, #hero .word-reveal');
   heroLines.forEach((e) => e.classList.add('rv-in'));
-  requestAnimationFrame(resetToTop);
 };
 
 window.__kagePause = function() {
